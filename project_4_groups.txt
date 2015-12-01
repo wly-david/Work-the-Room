@@ -1,0 +1,9 @@
+g1: alice - sean - vishal
+g2: dhruv - parthi - kevin
+g3: artur - amar - preetam
+g4: cathy - nam - diana
+g5: tingting - jing - sagar
+g6: manyi - naman - ananya
+g7: liuyang - kosta - vinay
+g8: rhea - robert - sania
+g9: samarth - derek - seth
