@@ -150,7 +150,7 @@ public class Player implements wtr.sim.Player {
 				if (dd < minDistance)
 					minDistance = dd;
 			}
-			if (minDistance > 0.6)
+			if (minDistance > 0.8)
 				candidateTomove.offer(players[i]);
 		}
 		double expectedDistance;
@@ -172,17 +172,32 @@ public class Player implements wtr.sim.Player {
 		double dx = 6 * Math.cos(dir);
 		double dy = 6 * Math.sin(dir);
 		Point position = new Point(dx, dy, self_id);
-		double max = 0;
-		double min = Double.MAX_VALUE;
-		int target = 0;
-		boolean find_target = false;
+		
+        // find all valid cuts
+		PriorityQueue<Point> candidateTomove = new PriorityQueue<Point>(
+				new Comparator<Point>()
+                {
+                    public int compare( Point x, Point y )
+                    {
+            			double dx = x.x - self.x;
+            			double dy = x.y - self.y;
+            			double distanceTotargetx = Math.sqrt(dx * dx + dy * dy);
+            			dx = y.x - self.x;
+            			dy = y.y - self.y;
+            			double distanceTotargety = Math.sqrt(dx * dx + dy * dy);
+            			if (distanceTotargetx - distanceTotargety < 0)
+            				return -1;
+            			else if (distanceTotargetx - distanceTotargety == 0)
+            				return 0;
+            			else
+            				return 1;
+                    }
+                });
+		
 		int i,j;
 		for (i = 0; i < players.length; i ++) {
 			if (W[players[i].id] == 0) continue;
-			dx = players[i].x - self.x;
-			dy = players[i].y - self.y;
-			double distanceTotarget = Math.sqrt(dx * dx + dy * dy);
-			
+
 			double minDistance = Double.MAX_VALUE;
 			for (j = 0; j < players.length; j ++) {
 				if (players[j].id ==self_id || i == j) continue;
@@ -192,25 +207,16 @@ public class Player implements wtr.sim.Player {
 				if (dd < minDistance)
 					minDistance = dd;
 			}
-			if (minDistance > distanceTotarget) {
-				if (distanceTotarget < min) {
-					target = i;
-					min = distanceTotarget;
-					find_target = true;
-				}
-			}
-			else if (!find_target && minDistance > max) {
-				target = i;
-				max = minDistance;
-			}
+			if (minDistance > 1)
+				candidateTomove.offer(players[i]);
 		}
 		double expectedDistance;
-		if (!find_target && max < 1)
+		if (candidateTomove.size() == 0)
 			return position;
 		else 
-			expectedDistance = 0.6;
-		dx = players[target].x - self.x;
-		dy = players[target].y - self.y;
+			expectedDistance = 0.5;
+		dx = candidateTomove.peek().x - self.x;
+		dy = candidateTomove.peek().y - self.y;
 		double distanceTotarget = Math.sqrt(dx * dx + dy * dy);
 		position = new Point( dx * (distanceTotarget - expectedDistance) / distanceTotarget,
 				dy * (distanceTotarget - expectedDistance) / distanceTotarget, self_id);
