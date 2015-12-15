@@ -11,7 +11,7 @@ class Simulator {
 
 	private static final String root = "wtr";
 
-	private static final int soulmate_multiplier = 1;
+	private static final int soulmate_multiplier = 2;
 
 	public static void main(String[] args)
 	{
@@ -25,6 +25,7 @@ class Simulator {
 		boolean gui = false;
 		long gui_refresh = 100;
 		String[] groups = null;
+		PrintStream out = null;
 		ArrayList <Class <Player> > classes = null;
 		TreeSet <String> group_set = new TreeSet <String> ();
 		group_set.add("g0");
@@ -61,6 +62,10 @@ class Simulator {
 					double gui_fps = Double.parseDouble(args[a]);
 					gui_refresh = gui_fps > 0.0 ? Math.round(1000.0 / gui_fps) : -1;
 					gui = true;
+				} else if (args[a].equals("--file")) {
+					if (++a == args.length)
+						throw new IllegalArgumentException("Invalid file path");
+					out = new PrintStream(new FileOutputStream(args[a], false));
 				} else if (args[a].equals("--gui")) gui = true;
 				else if (args[a].equals("--verbose")) verbose = true;
 				else throw new IllegalArgumentException("Unknown argument: " + args[a]);
@@ -105,6 +110,11 @@ class Simulator {
 			double fps = 1000.0 / gui_refresh;
 			System.err.println("GUI: enabled  (up to " + fps + " FPS)");
 		}
+		if (out == null) out = System.err;
+		else {
+			System.out.close();
+			System.err.close();
+		}
 		// start game
 		int[] score = new int [N];
 		boolean[] timeout = new boolean [N];
@@ -121,25 +131,32 @@ class Simulator {
 			System.exit(1);
 		}
 		for (int i = 0 ; i != score.length ; ++i)
-			System.err.println("Player " + i + " (" + groups[i] +
-			                   ") scored: " + score[i] +
-			                   (score[i] == max_score ? " (maximum score) " : " ") +
-			                   (soulmate[i] ? "[soulmate chat]" : ""));
-		System.err.println("Available wisdom: " + max_score);
+			out.println("Player " + i + " (" + groups[i] +
+			            ") scored: " + score[i] +
+			            (score[i] == max_score ? " (maximum score) " : " ") +
+			            (soulmate[i] ? "[soulmate chat]" : ""));
+		out.println("Available wisdom: " + max_score);
 		int group_instances = N / group_set.size();
 		int i = 0;
 		for (String group : group_set) {
 			int min_group_score = max_score + 1;
 			int max_group_score = 0;
+			int sum_group_score = 0;
 			for (int j = 0 ; j != group_instances ; ++j, ++i) {
 				if (max_group_score < score[i])
 					max_group_score = score[i];
 				if (min_group_score > score[i])
 					min_group_score = score[i];
+				sum_group_score += score[i];
 			}
-			System.err.println("Group " + group + ": [" + min_group_score +
-			                   ", " + max_group_score + "]");
+			int avg_group_score = (int) Math.round(sum_group_score * 1.0 /
+			                                           group_instances);
+			out.println("Group " + group +
+			            ": [" + min_group_score +
+			             ", " + avg_group_score +
+			             ", " + max_group_score + "]");
 		}
+		if (out != System.err) out.close();
 		System.exit(0);
 	}
 

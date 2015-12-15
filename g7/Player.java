@@ -2,87 +2,91 @@ package wtr.g7;
 
 import wtr.sim.Point;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.Comparator;
 import java.util.PriorityQueue;
 import java.util.Random;
 
 public class Player implements wtr.sim.Player {
 
-	// debugging mode
-	private final static boolean debug = false;
-	
-	// your own id
-	private int self_id = -1;
+    // debugging mode
+    private final static boolean debug = false;
 
-	// the remaining wisdom per player
-	private int[] W = null;
-//	private int[] est_W = null;
-	private int totalWisdomofStranger = 0;
-	private int unknownPeople = 0; 
-	private int wait_time = 0;
-	// random generator
-	private Random random = new Random();
+    // your own id
+    private int self_id = -1;
 
-	// init function called once
-	public void init(int id, int[] friend_ids, int strangers)
-	{
-		self_id = id;
-		// initialize the wisdom array
-		int N = friend_ids.length + strangers + 2;
-		W = new int [N];
-		for (int i = 0 ; i != N ; ++i)
-			W[i] = i == self_id ? 0 : -1;
-		for (int friend_id : friend_ids)
-			W[friend_id] = 50;
-		totalWisdomofStranger = 200 + 10 * strangers;
-		unknownPeople = strangers + 1;
-	}
+    // the remaining wisdom per player
+    private int[] W = null;
+    //	private int[] est_W = null;
+    private int totalWisdomofStranger = 0;
+    private int unknownPeople = 0;
+    private int wait_time = 0;
+    private boolean ifmetsoulmate = false;
+    private boolean denseconfig;
+    private double friendpercentage = 0.0;
+    // random generator
+    private Random random = new Random();
 
-	// play function
-	public Point play(Point[] players, int[] chat_ids,
-	                  boolean wiser, int more_wisdom)
-	{
-		// find where you are and who you chat with
-		int i = 0, j = 0;
-		while (players[i].id != self_id) i++;
-		while (players[j].id != chat_ids[i]) j++;
-		Point self = players[i];
-		Point chat = players[j];
-		// record known wisdom
-		if (W[chat.id] == -1) {
-			totalWisdomofStranger = totalWisdomofStranger - more_wisdom;
-			unknownPeople --;
-		}
-		W[chat.id] = more_wisdom;
-		
-		// attempt to keep talking
-//		if (!wiser && i != j)
-//			wait_time ++;
-//		else
-//			wait_time = 0;
+    // init function called once
+    public void init(int id, int[] friend_ids, int strangers) {
+        self_id = id;
+        // initialize the wisdom array
+        int N = friend_ids.length + strangers + 2;
+        W = new int[N];
+        for (int i = 0; i != N; ++i)
+            W[i] = i == self_id ? 0 : -1;
+        for (int friend_id : friend_ids)
+            W[friend_id] = 50;
+        totalWisdomofStranger = 400 + 10 * strangers;
+        friendpercentage = friend_ids.length / N;
+        denseconfig = (N > 500);
+        unknownPeople = strangers + 1;
+    }
+
+    // play function
+    public Point play(Point[] players, int[] chat_ids,
+                      boolean wiser, int more_wisdom) {
+        // find where you are and who you chat with
+        int i = 0, j = 0;
+        while (players[i].id != self_id) i++;
+        while (players[j].id != chat_ids[i]) j++;
+        Point self = players[i];
+        Point chat = players[j];
+        // record known wisdom
+        if (W[chat.id] == -1) {
+            if (wiser)
+                totalWisdomofStranger--;
+            if (more_wisdom > 50)
+                ifmetsoulmate = true;
+            totalWisdomofStranger = totalWisdomofStranger - more_wisdom;
+            unknownPeople--;
+        }
+        W[chat.id] = more_wisdom;
+
+        // attempt to keep talking
+        if (!wiser && i != j)
+            wait_time++;
+        else
+            wait_time = 0;
 //		if (wait_time <= more_wisdom / 10 && i != j)
 //			return new Point(0,0,chat.id);
-		
-		// attempt to chat with the closet one if you're the closet one to him, too
-		Point closetPerson = null;
-		double distToPersonWithNowisdom = Double.MAX_VALUE;
-		double distance = Double.MAX_VALUE;
-		for (Point p : players) {
-			// skip if no more wisdom to gain
-			if (W[p.id] == 0) {
-				if (p.id == self_id) continue;
-				double dx = self.x - p.x;
-				double dy = self.y - p.y;
-				double dd = dx * dx + dy * dy;
-				if (dd < distToPersonWithNowisdom) {
-					distToPersonWithNowisdom = dd;
-				}
-				continue;
-			}
-			// compute squared distance
+
+        // attempt to chat with the closet one if you're the closet one to him, too
+        Point closetPerson = null;
+        double distToPersonWithNowisdom = Double.MAX_VALUE;
+        double distance = Double.MAX_VALUE;
+        for (Point p : players) {
+            // skip if no more wisdom to gain
+            if (W[p.id] == 0) {
+                if (p.id == self_id) continue;
+                double dx = self.x - p.x;
+                double dy = self.y - p.y;
+                double dd = dx * dx + dy * dy;
+                if (dd < distToPersonWithNowisdom) {
+                    distToPersonWithNowisdom = dd;
+                }
+                continue;
+            }
+            // compute squared distance
 //			int closet_ID = -1;
 //			double dist_pq = Double.MAX_VALUE;
 //			for (Point q : players) {
@@ -96,182 +100,213 @@ public class Player implements wtr.sim.Player {
 //				}
 //			}
 //			if (closet_ID != self_id) continue;
-			double dx = self.x - p.x;
-			double dy = self.y - p.y;
-			double dd = dx * dx + dy * dy;
-			// start chatting if in range
-			if (dd < distance) {
-				closetPerson = p;
-				distance = dd;
-			}
-		}
-		if (distance >= 0.25 && distance <= 4.0 && distance < distToPersonWithNowisdom) {
+            double dx = self.x - p.x;
+            double dy = self.y - p.y;
+            double dd = dx * dx + dy * dy;
+            // start chatting if in range
+            if (dd < distance) {
+                closetPerson = p;
+                distance = dd;
+            }
+        }
+        if (distance >= 0.25 && distance <= 4.0 && (distance < distToPersonWithNowisdom || denseconfig	)
+                && (closetPerson.id != chat.id || wait_time <= more_wisdom / 4)) {
 //			System.out.println("my ID: " + self_id +"\n"+"chat with: (" +closetPerson.id+")");
-			return new Point(0,0,closetPerson.id);
-		}
-		// move to some place where you can talk with the most people
+            return new Point(0, 0, closetPerson.id);
+        }
+        // move to some place where you can talk with the most people
 //		if (players.length <= 20)
 //			return moveToTheCrowdedZone(players, self);
-		// move to the person who is far away from others
+        // move to the person who is far away from others
 //		else
-			return newMoveFunction(players, self);
-//			return moveToThePersonAlone(players, self);
-	}
-	// Move to the person with the most wisdom and away from others
-	private Point newMoveFunction(Point[] players, Point self) {
-		double dir = random.nextDouble() * 2 * Math.PI;
-		double dx = 6 * Math.cos(dir);
-		double dy = 6 * Math.sin(dir);
-		Point position = new Point(dx, dy, self_id);
-		
-        // find all valid cuts
-		PriorityQueue<Point> candidateTomove = new PriorityQueue<Point>(
-				new Comparator<Point>()
-                {
-                    public int compare( Point x, Point y )
-                    {
-                    	int vx = (W[x.id] < 0) ? totalWisdomofStranger / unknownPeople : W[x.id];
-                    	int vy = (W[y.id] < 0) ? totalWisdomofStranger / unknownPeople : W[y.id];
-                    	return (vy - vx);
-                    }
-                });		
-		int i,j;
-		for (i = 0; i < players.length; i ++) {
-			if (W[players[i].id] == 0) continue;
-			dx = players[i].x - self.x;
-			dy = players[i].y - self.y;
-			
-			double minDistance = Double.MAX_VALUE;
-			for (j = 0; j < players.length; j ++) {
-				if (players[j].id ==self_id || i == j) continue;
-				dx = players[i].x - players[j].x;
-				dy = players[i].y - players[j].y;
-				double dd = Math.sqrt(dx * dx + dy * dy);
-				if (dd < minDistance)
-					minDistance = dd;
-			}
-			if (minDistance > 0.8)
-				candidateTomove.offer(players[i]);
-		}
-		double expectedDistance;
-		if (candidateTomove.size() == 0)
-			return position;
-		else 
-			expectedDistance = 0.5;
-		dx = candidateTomove.peek().x - self.x;
-		dy = candidateTomove.peek().y - self.y;
-		double distanceTotarget = Math.sqrt(dx * dx + dy * dy);
-		position = new Point( dx * (distanceTotarget - expectedDistance) / distanceTotarget,
-				dy * (distanceTotarget - expectedDistance) / distanceTotarget, self_id);
-//		System.out.println("my ID: " + self_id+ "\n"+ "my move: (" +position.x+","+position.y+")");
-		return position;
-	}
-	
-	private Point moveToThePersonAlone(Point[] players, Point self) {
-		double dir = random.nextDouble() * 2 * Math.PI;
-		double dx = 6 * Math.cos(dir);
-		double dy = 6 * Math.sin(dir);
-		Point position = new Point(dx, dy, self_id);
-		
-        // find all valid cuts
-		PriorityQueue<Point> candidateTomove = new PriorityQueue<Point>(
-				new Comparator<Point>()
-                {
-                    public int compare( Point x, Point y )
-                    {
-            			double dx = x.x - self.x;
-            			double dy = x.y - self.y;
-            			double distanceTotargetx = Math.sqrt(dx * dx + dy * dy);
-            			dx = y.x - self.x;
-            			dy = y.y - self.y;
-            			double distanceTotargety = Math.sqrt(dx * dx + dy * dy);
-            			if (distanceTotargetx - distanceTotargety < 0)
-            				return -1;
-            			else if (distanceTotargetx - distanceTotargety == 0)
-            				return 0;
-            			else
-            				return 1;
-                    }
-                });
-		
-		int i,j;
-		for (i = 0; i < players.length; i ++) {
-			if (W[players[i].id] == 0) continue;
+        if (denseconfig)
+            return moveToThePersonAlone(players, self);
+        else
+            return newMoveFunction(players, chat_ids, self);
+    }
 
-			double minDistance = Double.MAX_VALUE;
-			for (j = 0; j < players.length; j ++) {
-				if (players[j].id ==self_id || i == j) continue;
-				dx = players[i].x - players[j].x;
-				dy = players[i].y - players[j].y;
-				double dd = Math.sqrt(dx * dx + dy * dy);
-				if (dd < minDistance)
-					minDistance = dd;
-			}
-			if (minDistance > 1)
-				candidateTomove.offer(players[i]);
-		}
-		double expectedDistance;
-		if (candidateTomove.size() == 0)
-			return position;
-		else 
-			expectedDistance = 0.5;
-		dx = candidateTomove.peek().x - self.x;
-		dy = candidateTomove.peek().y - self.y;
-		double distanceTotarget = Math.sqrt(dx * dx + dy * dy);
-		position = new Point( dx * (distanceTotarget - expectedDistance) / distanceTotarget,
-				dy * (distanceTotarget - expectedDistance) / distanceTotarget, self_id);
+    // Move to the person with the most wisdom and away from others
+    private Point newMoveFunction(Point[] players, int[] chat_ids, Point self) {
+        double dir = random.nextDouble() * 2 * Math.PI;
+        double dx = 6 * Math.cos(dir);
+        double dy = 6 * Math.sin(dir);
+        Point position = new Point(dx, dy, self_id);
+
+        // find all valid cuts
+        PriorityQueue<Point> candidateTomove = new PriorityQueue<>(
+                (Comparator<Point>) (x, y) -> {
+                    int vx, vy;
+                    	if (ifmetsoulmate || friendpercentage < 0.5) {
+                            vx = (W[x.id] < 0) ? totalWisdomofStranger / unknownPeople : W[x.id];
+                            vy = (W[y.id] < 0) ? totalWisdomofStranger / unknownPeople : W[y.id];
+                    	}
+                    	else {
+                        	vx = (W[x.id] < 0) ? 51 : W[x.id];
+                        	vy = (W[y.id] < 0) ? 51 : W[y.id];
+                    	}
+                    return (vy - vx);
+                });
+        int i, j;
+        for (i = 0; i < players.length; i++) {
+            if (W[players[i].id] == 0) continue;
+            dx = players[i].x - self.x;
+            dy = players[i].y - self.y;
+
+            double minDistance = Double.MAX_VALUE;
+            for (j = 0; j < players.length; j++) {
+                if (players[j].id == self_id || i == j) continue;
+                dx = players[i].x - players[j].x;
+                dy = players[i].y - players[j].y;
+                double dd = Math.sqrt(dx * dx + dy * dy);
+                if (dd < minDistance)
+                    minDistance = dd;
+            }
+            if (minDistance > 0.6)
+                candidateTomove.offer(players[i]);
+        }
+        double expectedDistance;
+        if (candidateTomove.size() == 0)
+            return position;
+        else {
+            Point target = candidateTomove.peek();
+            i = 0;
+            while (players[i].id != target.id) i++;
+            if (players[i].id != chat_ids[i]) {
+                expectedDistance = 0.5;
+                dx = target.x - self.x;
+                dy = target.y - self.y;
+                double distanceTotarget = Math.sqrt(dx * dx + dy * dy);
+                position = new Point(dx * (distanceTotarget - expectedDistance) / distanceTotarget,
+                        dy * (distanceTotarget - expectedDistance) / distanceTotarget, self_id);
+//				System.out.println("my ID: " + self_id+ "\n"+ "my move: (" +position.x+","+position.y+")");
+                return position;
+            } else {
+                if (W[target.id] < 20) {
+                    expectedDistance = 0.5;
+                    dx = target.x - self.x;
+                    dy = target.y - self.y;
+                    double distanceTotarget = Math.sqrt(dx * dx + dy * dy);
+                    position = new Point(dx * (distanceTotarget - expectedDistance) / distanceTotarget,
+                            dy * (distanceTotarget - expectedDistance) / distanceTotarget, self_id);
+//					System.out.println("my ID: " + self_id+ "\n"+ "my move: (" +position.x+","+position.y+")");
+                } else {
+                    dx = target.x - self.x;
+                    dy = target.y - self.y;
+                    double distanceTotarget = Math.sqrt(dx * dx + dy * dy);
+                    expectedDistance = 0.5;
+                    position = new Point(dx * (distanceTotarget - expectedDistance) / distanceTotarget,
+                            dy * (distanceTotarget - expectedDistance) / distanceTotarget, self_id);
+//					System.out.println("my ID: " + self_id+ "\n"+ "my move: (" +position.x+","+position.y+")");
+                }
+                return position;
+            }
+        }
+    }
+
+    private Point moveToThePersonAlone(Point[] players, Point self) {
+        double dir = random.nextDouble() * 2 * Math.PI;
+        double dx = 6 * Math.cos(dir);
+        double dy = 6 * Math.sin(dir);
+        Point position = new Point(dx, dy, self_id);
+
+        // find all valid cuts
+        PriorityQueue<Point> candidateTomove = new PriorityQueue<>(
+                (Comparator<Point>) (x, y) -> {
+                    double dx1 = x.x - self.x;
+                    double dy1 = x.y - self.y;
+                    double distanceTotargetx = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+                    dx1 = y.x - self.x;
+                    dy1 = y.y - self.y;
+                    double distanceTotargety = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+                    if (distanceTotargetx - distanceTotargety < 0)
+                        return -1;
+                    else if (distanceTotargetx - distanceTotargety == 0)
+                        return 0;
+                    else
+                        return 1;
+                });
+
+        int i, j;
+        for (i = 0; i < players.length; i++) {
+            if (W[players[i].id] == 0) continue;
+
+            double minDistance = Double.MAX_VALUE;
+            for (j = 0; j < players.length; j++) {
+                if (players[j].id == self_id || i == j) continue;
+                dx = players[i].x - players[j].x;
+                dy = players[i].y - players[j].y;
+                double dd = Math.sqrt(dx * dx + dy * dy);
+                if (dd < minDistance)
+                    minDistance = dd;
+            }
+            if (minDistance > 1.2)
+                candidateTomove.offer(players[i]);
+        }
+        double expectedDistance;
+        if (candidateTomove.size() == 0) {
+        	System.out.println("rrrandom");
+            return position;
+        }
+        else
+            expectedDistance = 0.5;
+    	System.out.println("ccccloser");
+        dx = candidateTomove.peek().x - self.x;
+        dy = candidateTomove.peek().y - self.y;
+        double distanceTotarget = Math.sqrt(dx * dx + dy * dy);
+        position = new Point(dx * (distanceTotarget - expectedDistance) / distanceTotarget,
+                dy * (distanceTotarget - expectedDistance) / distanceTotarget, self_id);
 //		System.out.println("my ID: " + self_id+ "\n"+ "my move: (" +position.x+","+position.y+")");
-		return position;
-	}
-	
-	private Point moveToTheCrowdedZone(Point[] players, Point self) {
-		double dir = random.nextDouble() * 2 * Math.PI;
-		double dx = 6 * Math.cos(dir);
-		double dy = 6 * Math.sin(dir);
-		Point position = new Point(dx, dy, self_id);
-		int max = 0;
-		int i,j;
-		for (i = 0; i < players.length; i ++) {
-			if (W[players[i].id] == 0) continue;
-			for (j = 0; j < players.length; j ++) {
-				if (W[players[j].id] == 0 || i == j) continue;
-				dx = players[i].x - players[j].x;
-				dy = players[i].y - players[j].y;
-				double dd = dx * dx + dy * dy;
-				if (dd > 16.0) continue;
-				double dist = Math.sqrt(dd);
-				double theta = Math.acos(dist/2.0);
-				
-				int count = 0;
-				double x = players[j].x + dx/2.0*Math.tan(theta);
-				double y = players[j].y + dy/2.0*Math.tan(theta);
-				for (int k = 0; k < players.length; k ++) {
-					if (W[players[i].id] == 0 ) continue;
-					double ddToNewPos = (players[k].x - x) * (players[k].x - x) 
-							+ (players[k].y - y) * (players[k].y - y);
-					if (ddToNewPos >= 0.25 && ddToNewPos <= 4.0) count ++;
-				}
-				if (count > max && (x - self.x) * (x - self.x) + (y - self.y) * (y - self.y) <= 36.0) {
-					max = count;
-					position = new Point(x - self.x, y - self.y, self_id);
-				}
-				
-				count = 0;
-				x = players[j].x - dx/2.0*Math.tan(theta);
-				y = players[j].y - dy/2.0*Math.tan(theta);
-				for (int k = 0; k < players.length; k ++) {
-					if (W[players[i].id] == 0 ) continue;
-					double ddToNewPos = (players[k].x - x) * (players[k].x - x) 
-							+ (players[k].y - y) * (players[k].y - y);
-					if (ddToNewPos >= 0.25 && ddToNewPos <= 4.0) count ++;
-				}
-				if (count > max && (x - self.x) * (x - self.x) + (y - self.y) * (y - self.y) <= 36.0) {
-					max = count;
-					position = new Point(x - self.x, y - self.y, self_id);
-				}
-			}
-		}
+        return position;
+    }
+
+    private Point moveToTheCrowdedZone(Point[] players, Point self) {
+        double dir = random.nextDouble() * 2 * Math.PI;
+        double dx = 6 * Math.cos(dir);
+        double dy = 6 * Math.sin(dir);
+        Point position = new Point(dx, dy, self_id);
+        int max = 0;
+        int i, j;
+        for (i = 0; i < players.length; i++) {
+            if (W[players[i].id] == 0) continue;
+            for (j = 0; j < players.length; j++) {
+                if (W[players[j].id] == 0 || i == j) continue;
+                dx = players[i].x - players[j].x;
+                dy = players[i].y - players[j].y;
+                double dd = dx * dx + dy * dy;
+                if (dd > 16.0) continue;
+                double dist = Math.sqrt(dd);
+                double theta = Math.acos(dist / 2.0);
+
+                int count = 0;
+                double x = players[j].x + dx / 2.0 * Math.tan(theta);
+                double y = players[j].y + dy / 2.0 * Math.tan(theta);
+                for (Point player : players) {
+                    if (W[players[i].id] == 0) continue;
+                    double ddToNewPos = (player.x - x) * (player.x - x)
+                            + (player.y - y) * (player.y - y);
+                    if (ddToNewPos >= 0.25 && ddToNewPos <= 4.0) count++;
+                }
+                if (count > max && (x - self.x) * (x - self.x) + (y - self.y) * (y - self.y) <= 36.0) {
+                    max = count;
+                    position = new Point(x - self.x, y - self.y, self_id);
+                }
+
+                count = 0;
+                x = players[j].x - dx / 2.0 * Math.tan(theta);
+                y = players[j].y - dy / 2.0 * Math.tan(theta);
+                for (Point player : players) {
+                    if (W[players[i].id] == 0) continue;
+                    double ddToNewPos = (player.x - x) * (player.x - x)
+                            + (player.y - y) * (player.y - y);
+                    if (ddToNewPos >= 0.25 && ddToNewPos <= 4.0) count++;
+                }
+                if (count > max && (x - self.x) * (x - self.x) + (y - self.y) * (y - self.y) <= 36.0) {
+                    max = count;
+                    position = new Point(x - self.x, y - self.y, self_id);
+                }
+            }
+        }
 //		System.out.println("my ID: " + self_id+ "\n"+ "my move: (" +position.x+","+position.y+")");
-		return position;
-	}
+        return position;
+    }
 }

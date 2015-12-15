@@ -284,11 +284,34 @@ public class Player implements wtr.sim.Player {
             println("was chatting with " + chat_id + " with remaining wisdom " + more_wisdom + " wiser: " +
                     (wiser ? 1 : 0) + " Wus: " + Wus[chat_id]);
             move = new Point(0.0, 0.0, chat_id);
+            // int wait_for = Math.max((this.friends + this.strangers + 2)/100, 1);
+            int wait_for;
+            // if dense board (more than 100 people)
+            if ((this.friends + this.strangers + 2) > 100)
+                wait_for = 2;
+            else
+                // if sparse board
+                wait_for = 1;
+            
+            // if (more_wisdom > 5)  //TODO replace with some proportion of the total more_wisodm possible
+            //     wait_for += 1;
+            if (more_wisdom > 10)
+                wait_for += 1;
+            else if (more_wisdom > 50) // if soulmate still worth much more than a friend
+                wait_for += 1;
+
+            if (tick > 0.6 * 1800) //if 60% of the time has elapsed
+                wait_for = Math.min(wait_for, 1);
+            else if (tick > 0.3 * 1800) // if 30% time has elapsed
+                wait_for = Math.min(wait_for, 2);
+            else
+                wait_for = Math.min(wait_for, 3); // if ample time left
+
             if (wiser) {
                 interference_counter = 0;
             } else {
                 ++interference_counter;
-                if (interference_counter > 5 || more_wisdom == 0) {
+                if (interference_counter > wait_for || more_wisdom == 0) {
                     if (more_wisdom == 0) {
                         println("Done talking with " + chat_id);
                     } else {

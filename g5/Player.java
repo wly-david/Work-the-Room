@@ -2,6 +2,8 @@ package wtr.g5;
 
 import wtr.sim.Point;
 
+import java.io.File;
+import java.io.PrintWriter;
 import java.util.HashSet;
 import java.util.Random;
 
@@ -19,6 +21,7 @@ public class Player implements wtr.sim.Player {
 	private HashSet<Integer> friendSet;
 
 	private int interfereThreshold = 5;
+	private int nTurnsMaxWait = 6;
 
 	private int interfereCount = 0;
 	private Integer preChatId;
@@ -28,34 +31,49 @@ public class Player implements wtr.sim.Player {
 	private Integer numberOfStrangers;
 	private Integer totalNumber;
 	private int soulmateID;
+	private int cur_stranger_wisdom;
+	PrintWriter po;
+	boolean waitingForTarget;
+	int nTurnsWaited;
+	Point target;
+	int tick = 0;
 	
 	// init function called once
 	public void init(int id, int[] friend_ids, int strangers)
 	{
+		target = null;
+		waitingForTarget = false;
+		nTurnsWaited = 0;
 		self_id = id;
+		try {
+			po = null;
+			//po = new PrintWriter(new File(id+"_debug.txt"));
+		} catch (Exception e) {
+			po = null;
+		}
 		friendSet = new HashSet<Integer>();
 		// initialize the wisdom array
 		int N = friend_ids.length + strangers + 2;
 		totalNumber = N;
 		W = new int [N];
 		// initialize strangers' wisdom to 5.5 (avg wisdom for 1/3 + 1/3 + 1/3 configuration)
-		int stranger_wisdom = (int) (5.5*strangers + 200)/(strangers+1);
+		cur_stranger_wisdom = (int) (5.5*strangers + 400)/(strangers+1);
 		// debug("strangerWisdom: "+stranger_wisdom);
 		for (int i = 0 ; i != N ; ++i)
-			W[i] = i == self_id ? 0 : stranger_wisdom;
+			W[i] = i == self_id ? 0 : cur_stranger_wisdom;
 		for (int friend_id : friend_ids){
 			friendSet.add(friend_id);
 			W[friend_id] = 50;
 		}
 		preChatId = self_id;
 		alreadyTalkedStrangers = new HashSet<Integer>();
-		strangerUnknowWisdom = strangers * 5.5 + 200;
+		strangerUnknowWisdom = strangers * 5.5 + 400;
 		numberOfStrangers = strangers + 1;
 		soulmateID = -1;
 	}
 	public void updateStrangerWisdom(){
 		
-		int cur_stranger_wisdom = (int) (strangerUnknowWisdom / numberOfStrangers);
+		cur_stranger_wisdom = (int) (strangerUnknowWisdom / numberOfStrangers);
 		for(int i = 0; i < totalNumber; i++){
 			if(friendSet.contains(i) || alreadyTalkedStrangers.contains(i) || i == self_id)
 				continue;
@@ -71,12 +89,55 @@ public class Player implements wtr.sim.Player {
 		// 	if(players[i].id != i)
 		// 		System.out.println("ID NOT I: "+players[i].id+"\t"+i);
 		// }
+		++tick;
 		int i = 0, j = 0;
 		while (players[i].id != self_id) i++;
 		while (players[j].id != chat_ids[i]) j++;
+		
+		boolean conversedLastTurn = j != i;
 
 		Point self = players[i];
 		Point chat = players[j];
+		
+		boolean sabotaged = false;
+		
+		if(waitingForTarget && ++nTurnsWaited <= nTurnsMaxWait) {
+			int targetID = target.id;
+			int targetIndex = 0;
+			while(targetIndex < players.length && players[targetIndex].id != targetID) ++targetIndex;
+			
+			if(targetIndex == players.length) {
+				waitingForTarget = false;
+				target = null;
+				nTurnsWaited = 0;
+				debugNoNewline("TARGET NOT IN VISION");
+			}
+			
+			else if(conversedLastTurn) {
+				waitingForTarget = false;
+				target = null;
+				nTurnsWaited = 0;
+				debugNoNewline("SUCCESSFUL SABOTAGE: "+i+", "+j);
+				sabotaged = true;
+			}
+			
+			else if(distance(self, players[targetIndex]) <= .6){
+				debug("WAITING FOR TARGET");
+				return new Point(0,0,targetID);
+			}
+			
+			else {
+				debugNoNewline("TARGET ESCAPED");
+				waitingForTarget = false;
+				target = null;
+				nTurnsWaited = 0;
+			}
+		} else if (nTurnsWaited > 6) {
+			debugNoNewline("TARGET ENGAGED MORE THAN 6 TURNS");
+			waitingForTarget = false;
+			target = null;
+			nTurnsWaited = 0;
+		}
 		
 		selfPlayer = self;
 		//soul mate
@@ -84,8 +145,9 @@ public class Player implements wtr.sim.Player {
 			alreadyTalkedStrangers.add(chat.id);
 			soulmateID = chat.id;
 			friendSet.add(chat.id);
-			// Keep track of soulmate, so you only subtract the 200 one time.
-			strangerUnknowWisdom -= 200;	
+			// Keep track of soulmate, so you only subtract the 400 one time.
+			strangerUnknowWisdom -= 400;	
+			numberOfStrangers--;
 		}else if(chat.id != self_id && !friendSet.contains(chat.id) && !alreadyTalkedStrangers.contains(chat.id)){
 			alreadyTalkedStrangers.add(chat.id);
 			// If they have 20 wisdom to share with us, on average this conversation will give us 10 wisdom
@@ -96,6 +158,7 @@ public class Player implements wtr.sim.Player {
 			// (since they have 1/3 chance to get nothing from us!)
 			else if(more_wisdom > 0)
 				strangerUnknowWisdom -= 6.6666;
+			numberOfStrangers--;
 		}
 		
 		// record known wisdom
@@ -108,21 +171,23 @@ public class Player implements wtr.sim.Player {
 		if(chat.id != preChatId)
 			interfereCount = 0;
 		if(!wiser && (friendSet.contains(chat.id) && W[chat.id] > 0)) {
+			debugNoNewline("INTERFERED");
 			interfereCount++;
 		}
-		if (wiser || (friendSet.contains(chat.id) && W[chat.id] > 0)) {
-			if(!wiser && interfereCount >= interfereThreshold){
+		if (sabotaged || wiser || (friendSet.contains(chat.id) && W[chat.id] > 0)) {
+			if(!wiser && interfereCount >= (W[chat.id] > cur_stranger_wisdom ? interfereThreshold : 0)){
 				//If two friends has been interfered more than 5 times, then move away
-				System.out.println("RANDMOVE");
+				debug("RANDMOVE");
 				return randomMoveInRoom(self);
-			}else{
+			} else{
 				preChatId = chat.id;
 				System.out.println("DIST: "+distance(self, chat));
 				if(distance(self, chat) > 0.6) {
 					Point ret = getCloserWithID(self, chat, self.id);
+					debug("TO CONVERSANT");
 					return ret;
 				}
-				System.out.println("CONTINUE CHAT");
+				debug("CONTINUE CHAT");
 				return new Point(0.0, 0.0, chat.id);
 			}
 		}
@@ -133,21 +198,27 @@ public class Player implements wtr.sim.Player {
 
 				Point maxWisdomTarget = pickTarget2(players, 6, chat_ids);
 				if (maxWisdomTarget == null) {
-					System.out.println("no valid target.");
+//					System.out.println("no valid target.");
 					// jump to random position
+					debug("no valid target.  RANDMOVE");
 					return randomMoveInRoom(self);
 				} else {
 					// get closer to maxWisdomTarget
-					System.out.println("GET CLOSER");
+//					System.out.println("GET CLOSER");
+					debug("GET CLOSER TO ENGAGED TARGET");
+					waitingForTarget = true;
+					nTurnsWaited = 0;
+					target = maxWisdomTarget;
 					return getCloser(selfPlayer, maxWisdomTarget);
 				}
 			} else {
-				System.out.println("CHATCLOSEST");
+				debug("START CHAT CLOSEST");
 				return closestTarget;
 			}
 
 		}
 		// return a random move
+		debug("no productive move RANDMOVE");
 		return randomMoveInRoom(self);
 	}
 
@@ -211,15 +282,18 @@ public class Player implements wtr.sim.Player {
 		for (int i = 0; i < players.length; i++){
 
 			// not conversing with anyone
-			if (players[i].id != chat_ids[i])
+			if (players[i].id != chat_ids[i]) {
 				continue;
-			// swap with maxWisdom and maxTarget if wiser
-			// System.out.println("this wisdom: " + W[players[i].id]);
-			if (W[players[i].id] > maxWisdom) {
+			} else {
+				if (W[players[i].id] > maxWisdom) {
 
-				maxWisdom = W[players[i].id];
-				maxTarget = players[i];
+					maxWisdom = W[players[i].id];
+					maxTarget = players[i];
+				}
 			}
+			// swap with maxWisdom and maxTarget if wiser
+			 //System.out.println("this wisdom: " + W[players[i].id]);
+			
 //			System.out.println("max wisdom: " + maxWisdom);
 		}
 
@@ -228,15 +302,15 @@ public class Player implements wtr.sim.Player {
 	}
 
 	public Point getCloser(Point self, Point target){
-		debug("get closer");
+//		debug("get closer");
 		//can't set to 0.5, if 0.5 the result distance may be 0.49
 		double targetDis = 0.52;
 		double dis = distance(self, target);
 		double x = (dis - targetDis) * (target.x - self.x) / dis;
 		double y = (dis - targetDis) * (target.y - self.y) / dis;
-		System.out.println("self pos: " + self.x + ", " + self.y);
-		System.out.println("target pos: " + target.x + ", " + target.y);
-		System.out.println("move pos: " + x + ", " + y);
+//		System.out.println("self pos: " + self.x + ", " + self.y);
+//		System.out.println("target pos: " + target.x + ", " + target.y);
+//		System.out.println("move pos: " + x + ", " + y);
 		return new Point(x, y, self_id);
 	}
 	
@@ -253,8 +327,14 @@ public class Player implements wtr.sim.Player {
 		double dy = p1.y - p2.y;
 		return Math.sqrt(dx * dx + dy * dy);
 	}
-	public static void debug(String str){
-		System.out.println(str);
+	
+	public void debug(String str){
+		//po.println(tick+"\t"+str);
+		//if(tick%100 == 0) po.flush();
+	}
+	
+	public void debugNoNewline(String str) {
+		//po.print(tick+"\t"+str+"\t");
 	}
 
 }
